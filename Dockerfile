@@ -1,99 +1,49 @@
-ARG           FROM_IMAGE_BUILDER=ghcr.io/dubo-dubon-duponey/base:builder-bullseye-2021-06-01@sha256:f0ba079c698161922961d9492e27469fca807b9a86a68e6162c325b62b792e81
-ARG           FROM_IMAGE_RUNTIME=ghcr.io/dubo-dubon-duponey/base:runtime-bullseye-2021-06-01@sha256:d904e13fbfd217ced9a853d932281f2f64e108d725a767858d2c1957b4e10232
+ARG           FROM_REGISTRY=ghcr.io/dubo-dubon-duponey
+
+ARG           FROM_IMAGE_BUILDER=base:builder-bullseye-2021-07-01@sha256:f1c46316c38cc1ca54fd53b54b73797b35ba65ee727beea1a5ed08d0ad7e8ccf
+ARG           FROM_IMAGE_RUNTIME=base:runtime-bullseye-2021-07-01@sha256:9f5b20d392e1a1082799b3befddca68cee2636c72c502aa7652d160896f85b36
+ARG           FROM_IMAGE_TOOLS=tools:linux-bullseye-2021-07-01@sha256:f1e25694fe933c7970773cb323975bb5c995fa91d0c1a148f4f1c131cbc5872c
+
+FROM          $FROM_REGISTRY/$FROM_IMAGE_TOOLS                                                                          AS builder-tools
+
 
 #######################
-# Extra builder for healthchecker
+# Fetcher
 #######################
-FROM          --platform=$BUILDPLATFORM $FROM_IMAGE_BUILDER                                                             AS builder-healthcheck
+FROM          --platform=$BUILDPLATFORM $FROM_REGISTRY/$FROM_IMAGE_BUILDER                                              AS fetcher-main
 
-ARG           GIT_REPO=github.com/dubo-dubon-duponey/healthcheckers
-ARG           GIT_VERSION=51ebf8c
-ARG           GIT_COMMIT=51ebf8ca3d255e0c846307bf72740f731e6210c3
-ARG           GO_BUILD_SOURCE=./cmd/rtsp
-ARG           GO_BUILD_OUTPUT=rtsp-health
-ARG           GO_LD_FLAGS="-s -w"
-ARG           GO_TAGS="netgo osusergo"
+ENV           GIT_REPO=github.com/badaix/snapcast
+ENV           GIT_VERSION=0.25.0
+ENV           GIT_COMMIT=2af5292f9df9e8f5a54114ed0ef96ca25cd32135
 
-WORKDIR       $GOPATH/src/$GIT_REPO
-RUN           git clone --recurse-submodules git://"$GIT_REPO" . && git checkout "$GIT_COMMIT"
-ARG           GOOS="$TARGETOS"
-ARG           GOARCH="$TARGETARCH"
-
-# hadolint ignore=SC2046
-RUN           env GOARM="$(printf "%s" "$TARGETVARIANT" | tr -d v)" go build -trimpath $(if [ "$CGO_ENABLED" = 1 ]; then printf "%s" "-buildmode pie"; fi) \
-                -ldflags "$GO_LD_FLAGS" -tags "$GO_TAGS" -o /dist/boot/bin/"$GO_BUILD_OUTPUT" "$GO_BUILD_SOURCE"
+RUN           git clone --recurse-submodules git://"$GIT_REPO" .
+RUN           git checkout "$GIT_COMMIT"
 
 #######################
-# Goello
+# Building image - XXX not ready for X-pile yet - should also copy over libraries (see shairport for inspiration)
 #######################
-FROM          --platform=$BUILDPLATFORM $FROM_IMAGE_BUILDER                                                             AS builder-goello
-
-ARG           GIT_REPO=github.com/dubo-dubon-duponey/goello
-ARG           GIT_VERSION=7ce1fb5
-ARG           GIT_COMMIT=7ce1fb5d9c739128d2644fbc1968b11efcb96ca2
-ARG           GO_BUILD_SOURCE=./cmd/server
-ARG           GO_BUILD_OUTPUT=goello-server
-ARG           GO_LD_FLAGS="-s -w"
-ARG           GO_TAGS="netgo osusergo"
-
-WORKDIR       $GOPATH/src/$GIT_REPO
-RUN           git clone --recurse-submodules git://"$GIT_REPO" . && git checkout "$GIT_COMMIT"
-ARG           GOOS="$TARGETOS"
-ARG           GOARCH="$TARGETARCH"
-
-# hadolint ignore=SC2046
-RUN           env GOARM="$(printf "%s" "$TARGETVARIANT" | tr -d v)" go build -trimpath $(if [ "$CGO_ENABLED" = 1 ]; then printf "%s" "-buildmode pie"; fi) \
-                -ldflags "$GO_LD_FLAGS" -tags "$GO_TAGS" -o /dist/boot/bin/"$GO_BUILD_OUTPUT" "$GO_BUILD_SOURCE"
-
-#######################
-# Caddy
-#######################
-FROM          --platform=$BUILDPLATFORM $FROM_IMAGE_BUILDER                                                             AS builder-caddy
-
-# This is 2.4.0
-ARG           GIT_REPO=github.com/caddyserver/caddy
-ARG           GIT_VERSION=2.4.3
-ARG           GIT_COMMIT=9d4ed3a3236df06e54c80c4f6633b66d68ad3673
-ARG           GO_BUILD_SOURCE=./cmd/caddy
-ARG           GO_BUILD_OUTPUT=caddy
-ARG           GO_LD_FLAGS="-s -w"
-ARG           GO_TAGS="netgo osusergo"
-
-WORKDIR       $GOPATH/src/$GIT_REPO
-RUN           git clone --recurse-submodules git://"$GIT_REPO" . && git checkout "$GIT_COMMIT"
-ARG           GOOS="$TARGETOS"
-ARG           GOARCH="$TARGETARCH"
-
-# hadolint ignore=SC2046
-RUN           env GOARM="$(printf "%s" "$TARGETVARIANT" | tr -d v)" go build -trimpath $(if [ "$CGO_ENABLED" = 1 ]; then printf "%s" "-buildmode pie"; fi) \
-                -ldflags "$GO_LD_FLAGS" -tags "$GO_TAGS" -o /dist/boot/bin/"$GO_BUILD_OUTPUT" "$GO_BUILD_SOURCE"
-
-#######################
-# Building image
-#######################
-FROM          $FROM_IMAGE_BUILDER                                                                                       AS builder-main
+FROM          fetcher-main                                                                                              AS builder-main
 
 ARG           BOOST_VERSION=76
 WORKDIR       /tmp/boost
+
 # XXXFIXME hey jfrog, what about upgrading your infrastructure to 1.3?
-RUN           curl --proto '=https' --tlsv1.2 -sSfL -o boost.tgz "https://boostorg.jfrog.io/artifactory/main/release/1.${BOOST_VERSION}.0/source/boost_1_${BOOST_VERSION}_0.tar.bz2"
-RUN           tar -xf boost.tgz
-
-ARG           GIT_REPO=github.com/badaix/snapcast
-ARG           GIT_VERSION=0.25.0
-ARG           GIT_COMMIT=2af5292f9df9e8f5a54114ed0ef96ca25cd32135
-
-WORKDIR       $GOPATH/src/$GIT_REPO
-RUN           git clone --recurse-submodules git://"$GIT_REPO" . && git checkout "$GIT_COMMIT"
-
-RUN           --mount=type=secret,mode=0444,id=CA,dst=/etc/ssl/certs/ca-certificates.crt \
+RUN           --mount=type=secret,id=CA \
               --mount=type=secret,id=CERTIFICATE \
               --mount=type=secret,id=KEY \
-              --mount=type=secret,id=PASSPHRASE \
-              --mount=type=secret,mode=0444,id=GPG.gpg \
+              --mount=type=secret,id=NETRC \
+              --mount=type=secret,id=.curlrc \
+              curl --tlsv1.2 -sSfL -o boost.tgz "https://boostorg.jfrog.io/artifactory/main/release/1.${BOOST_VERSION}.0/source/boost_1_${BOOST_VERSION}_0.tar.bz2"
+
+RUN           tar -xf boost.tgz
+
+RUN           --mount=type=secret,uid=100,id=CA \
+              --mount=type=secret,uid=100,id=CERTIFICATE \
+              --mount=type=secret,uid=100,id=KEY \
+              --mount=type=secret,uid=100,id=GPG.gpg \
               --mount=type=secret,id=NETRC \
               --mount=type=secret,id=APT_SOURCES \
-              --mount=type=secret,id=APT_OPTIONS,dst=/etc/apt/apt.conf.d/dbdbdp.conf \
+              --mount=type=secret,id=APT_CONFIG \
               apt-get update -qq && \
               apt-get install -qq --no-install-recommends \
                 libasound2-dev=1.2.4-1.1 \
@@ -109,6 +59,8 @@ RUN           --mount=type=secret,mode=0444,id=CA,dst=/etc/ssl/certs/ca-certific
                 libexpat1-dev=2.2.10-2 \
                 libboost-dev=1.74.0.3
 
+WORKDIR       /source
+
 RUN           ADD_CFLAGS="-I/tmp/boost/boost_1_${BOOST_VERSION}_0/" make client
 RUN           ADD_CFLAGS="-I/tmp/boost/boost_1_${BOOST_VERSION}_0/" make server
 RUN           mkdir -p /dist/boot/bin
@@ -117,34 +69,30 @@ RUN           cp server/snapserver /dist/boot/bin
 
 
 #######################
-# Builder assembly
+# Builder assembly, XXX should be auditor
 #######################
-FROM          $FROM_IMAGE_BUILDER                                                                                       AS builder
+FROM          --platform=$BUILDPLATFORM $FROM_REGISTRY/$FROM_IMAGE_BUILDER                                              AS builder
 
-#COPY          --from=builder-healthcheck /dist/boot/bin /dist/boot/bin
-#COPY          --from=builder-goello /dist/boot/bin /dist/boot/bin
-#COPY          --from=builder-caddy /dist/boot/bin /dist/boot/bin
-COPY          --from=builder-main /dist/boot /dist/boot
+COPY          --from=builder-main   /dist/boot/bin           /dist/boot/bin
 
 RUN           chmod 555 /dist/boot/bin/*; \
               epoch="$(date --date "$BUILD_CREATED" +%s)"; \
-              find /dist/boot/bin -newermt "@$epoch" -exec touch --no-dereference --date="@$epoch" '{}' +;
+              find /dist/boot -newermt "@$epoch" -exec touch --no-dereference --date="@$epoch" '{}' +;
 
 #######################
 # Running image
 #######################
-FROM          $FROM_IMAGE_RUNTIME
+FROM          $FROM_REGISTRY/$FROM_IMAGE_RUNTIME
 
 USER          root
 
-RUN           --mount=type=secret,mode=0444,id=CA,dst=/etc/ssl/certs/ca-certificates.crt \
-              --mount=type=secret,id=CERTIFICATE \
-              --mount=type=secret,id=KEY \
-              --mount=type=secret,id=PASSPHRASE \
-              --mount=type=secret,mode=0444,id=GPG.gpg \
+RUN           --mount=type=secret,uid=100,id=CA \
+              --mount=type=secret,uid=100,id=CERTIFICATE \
+              --mount=type=secret,uid=100,id=KEY \
+              --mount=type=secret,uid=100,id=GPG.gpg \
               --mount=type=secret,id=NETRC \
               --mount=type=secret,id=APT_SOURCES \
-              --mount=type=secret,id=APT_OPTIONS,dst=/etc/apt/apt.conf.d/dbdbdp.conf \
+              --mount=type=secret,id=APT_CONFIG \
               apt-get update -qq \
               && apt-get install -qq --no-install-recommends \
                 libasound2=1.2.4-1.1 \
@@ -168,9 +116,11 @@ USER          dubo-dubon-duponey
 
 COPY          --from=builder --chown=$BUILD_UID:root /dist /
 
-# RUN /boot/bin/snapclient -h; /boot/bin/snapserver -h; exit 1
-# RUN           ldd /boot/bin/snapclient; ldd /boot/bin/snapserver; exit 1;
+ENV           NICK="snap"
 
+ENV           DOMAIN="$NICK.local"
+ENV           PORT=4443
+EXPOSE        $PORT/tcp
 
 #ENV           NAME=TotaleCroquette
 
