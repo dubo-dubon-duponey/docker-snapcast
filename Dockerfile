@@ -1,8 +1,8 @@
 ARG           FROM_REGISTRY=ghcr.io/dubo-dubon-duponey
 
-ARG           FROM_IMAGE_BUILDER=base:builder-bullseye-2021-07-01@sha256:f1c46316c38cc1ca54fd53b54b73797b35ba65ee727beea1a5ed08d0ad7e8ccf
-ARG           FROM_IMAGE_RUNTIME=base:runtime-bullseye-2021-07-01@sha256:9f5b20d392e1a1082799b3befddca68cee2636c72c502aa7652d160896f85b36
-ARG           FROM_IMAGE_TOOLS=tools:linux-bullseye-2021-07-01@sha256:f1e25694fe933c7970773cb323975bb5c995fa91d0c1a148f4f1c131cbc5872c
+ARG           FROM_IMAGE_BUILDER=base:builder-bullseye-2021-08-01@sha256:f492d8441ddd82cad64889d44fa67cdf3f058ca44ab896de436575045a59604c
+ARG           FROM_IMAGE_RUNTIME=base:runtime-bullseye-2021-08-01@sha256:edc80b2c8fd94647f793cbcb7125c87e8db2424f16b9fd0b8e173af850932b48
+ARG           FROM_IMAGE_TOOLS=tools:linux-bullseye-2021-08-01@sha256:87ec12fe94a58ccc95610ee826f79b6e57bcfd91aaeb4b716b0548ab7b2408a7
 
 FROM          $FROM_REGISTRY/$FROM_IMAGE_TOOLS                                                                          AS builder-tools
 
@@ -16,8 +16,7 @@ ENV           GIT_REPO=github.com/badaix/snapcast
 ENV           GIT_VERSION=0.25.0
 ENV           GIT_COMMIT=2af5292f9df9e8f5a54114ed0ef96ca25cd32135
 
-RUN           git clone --recurse-submodules git://"$GIT_REPO" .
-RUN           git checkout "$GIT_COMMIT"
+RUN           git clone --recurse-submodules git://"$GIT_REPO" .; git checkout "$GIT_COMMIT"
 
 #######################
 # Building image - XXX not ready for X-pile yet - should also copy over libraries (see shairport for inspiration)
@@ -119,6 +118,7 @@ COPY          --from=builder --chown=$BUILD_UID:root /dist /
 ENV           NICK="snap"
 
 ENV           DOMAIN="$NICK.local"
+ENV           ADDITIONAL_DOMAINS=""
 ENV           PORT=4443
 EXPOSE        $PORT/tcp
 
