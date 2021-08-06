@@ -39,7 +39,7 @@ exec snapclient \
   --hostID "$UUID" \
   --host "$DOMAIN" \
   --port "$PORT" \
-  --logfilter *:"$(printf "$LOG_LEVEL" | tr '[:upper:]' '[:lower:]' | sed -i 's/^(warn)$/warning/')"
+  --logfilter *:"$(printf "%s" "${LOG_LEVEL:-error}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^(warn)$/warning/')"
 
 #  --instance "$NB"
 #  -l, --list                      list PCM devices
