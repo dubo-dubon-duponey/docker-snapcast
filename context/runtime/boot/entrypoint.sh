@@ -84,7 +84,7 @@ exec snapclient \
   --hostID "$UUID" \
   --host "$server" \
   --port "$port" \
-  --logfilter *:"$(printf "%s" "${LOG_LEVEL:-error}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^(warn)$/warning/')"
+  --logfilter "*:$(printf "%s" "${LOG_LEVEL:-error}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^(warn)$/warning/')"
 
 # --soundcard default:CARD=Qutest
 #  --instance "$NB"

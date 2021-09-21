@@ -185,7 +185,10 @@ COPY          --from=builder-tools  /boot/bin/goello-client  /dist/boot/bin
 #RUN           setcap 'cap_net_bind_service+ep' /dist/boot/bin/snapclient
 #RUN           setcap 'cap_net_bind_service+ep' /dist/boot/bin/snapserver
 
+
+# hadolint ignore=SC2016
 RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/bin/snapclient
+# hadolint ignore=SC2016
 RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/bin/snapserver
 
 # RUN           file /dist/boot/bin/snapclient; ldd /dist/boot/bin/snapclient; exit 1
