@@ -204,9 +204,9 @@ RUN           BIND_NOW=true \
 
 # XXX              RUNNING=true \
 # XXX              NO_SYSTEM_LINK=true \
+# RUN           BIND_NOW=true \
 #RUN           [ "$TARGETARCH" != "amd64" ] || export STACK_CLASH=true; \
-RUN           BIND_NOW=true \
-              PIE=true \
+RUN           PIE=true \
               FORTIFIED=true \
               STACK_PROTECTED=true \
               RO_RELOCATIONS=true \
