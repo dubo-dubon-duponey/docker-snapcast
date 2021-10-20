@@ -1,8 +1,27 @@
 #!/usr/bin/env bash
 set -o errexit -o errtrace -o functrace -o nounset -o pipefail
 
-NAME=${NAME:-no name}
+root="$(cd "$(dirname "${BASH_SOURCE[0]:-$PWD}")" 2>/dev/null 1>&2 && pwd)"
+readonly root
+# shellcheck source=/dev/null
+source "$root/helpers.sh"
+# shellcheck source=/dev/null
+source "$root/mdns.sh"
 
+# mDNS blast if asked to
+if [ "$MODE" == "server" ]; then
+  [ ! "${MDNS_HOST:-}" ] || {
+    [ ! "${MDNS_STATION:-}" ] || mdns::add "_workstation._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "$PORT"
+    mdns::add "$MDNS_TYPE" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
+    mdns::add "_snapcast-stream._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
+    mdns::add "_snapcast-tcp._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
+    mdns::add "_snapcast-http._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1780"
+    mdns::add "_snapcast-jsonrpc._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
+    mdns::start &
+  }
+fi
+
+NAME=${NAME:-no name}
 
 helpers::dbus(){
   # On container restart, cleanup the crap
@@ -50,21 +69,12 @@ helpers::avahi(){
 #  helpers::dbus
 #  helpers::avahi
 
-# XXX probably the config should be generated on the fly and be editable
+# HOST=$(goello-client  $MDNS_HOST.local)
+
+
 if [ "$MODE" == "server" ]; then
-  raw="$(printf '{"Type": "%s", "Name": "%s", "Host": "%s", "Port": %s, "Text": {}}' "_snapcast._tcp" "$MDNS_NAME" "$MDNS_HOST" "1704")"
-  stream="$(printf '{"Type": "%s", "Name": "%s", "Host": "%s", "Port": %s, "Text": {}}' "_snapcast-stream._tcp" "$MDNS_NAME" "$MDNS_HOST" "1704")"
-  tcp="$(printf '{"Type": "%s", "Name": "%s", "Host": "%s", "Port": %s, "Text": {}}' "_snapcast-tcp._tcp" "$MDNS_NAME" "$MDNS_HOST" "1705")"
-  http="$(printf '{"Type": "%s", "Name": "%s", "Host": "%s", "Port": %s, "Text": {}}' "_snapcast-http._tcp" "$MDNS_NAME" "$MDNS_HOST" "1780")"
-  jsonrpc="$(printf '{"Type": "%s", "Name": "%s", "Host": "%s", "Port": %s, "Text": {}}' "_snapcast-jsonrpc._tcp" "$MDNS_NAME" "$MDNS_HOST" "1705")"
-  goello-server -json "$(printf '[%s, %s, %s, %s, %s]' "$raw" "$stream" "$tcp" "$http" "$jsonrpc")" &
   HOME=/tmp exec snapserver --config /config/snapserver/main.conf
 fi
-
-#    if [ "${MDNS_ENABLED:-}" == true ]; then
-#    fi
-
-# HOST=$(goello-client  $MDNS_HOST.local)
 
 [ -e "/data/host_UUID" ] || head /dev/urandom | tr -dc A-Za-z0-9 | head -c 64 > /data/host_UUID
 UUID="$(cat /data/host_UUID)"

@@ -1,10 +1,10 @@
 ARG           FROM_REGISTRY=ghcr.io/dubo-dubon-duponey
 
-ARG           FROM_IMAGE_FETCHER=base:golang-bullseye-2021-10-01@sha256:dd38f2bdc3c26ea49db6ccea3923b2bd320605a6fee3e1dcff469bac00346ae2
-ARG           FROM_IMAGE_BUILDER=base:builder-bullseye-2021-10-01@sha256:8500836fc43374bdb9831ac0d76d70054987aa210ac6c3f2caff0ddd8ac53b90
-ARG           FROM_IMAGE_AUDITOR=base:auditor-bullseye-2021-10-01@sha256:af728eaf5271cae6a948f5c4d34a43b4cff5dae16cc3e5dabf99a0aeea7986a9
-ARG           FROM_IMAGE_TOOLS=tools:linux-bullseye-2021-10-01@sha256:24da09d01cc3505dd886672c0993f6f99b4fff4d1de2fcfbbe81aa52c880b9ac
-ARG           FROM_IMAGE_RUNTIME=base:runtime-bullseye-2021-10-01@sha256:5c76496f4dc901e9a59370babd9fa3c59427064971058b373121140a29fb153f
+ARG           FROM_IMAGE_FETCHER=base:golang-bullseye-2021-10-15@sha256:a35b057a1f360f1af4bc4743ca82cc3dbfce7c06599fcc6b531d592cbbf2fe12
+ARG           FROM_IMAGE_BUILDER=base:builder-bullseye-2021-10-15@sha256:1609d1af44c0048ec0f2e208e6d4e6a525c6d6b1c0afcc9d71fccf985a8b0643
+ARG           FROM_IMAGE_AUDITOR=base:auditor-bullseye-2021-10-15@sha256:2c95e3bf69bc3a463b00f3f199e0dc01cab773b6a0f583904ba6766b3401cb7b
+ARG           FROM_IMAGE_TOOLS=tools:linux-bullseye-2021-10-15@sha256:4de02189b785c865257810d009e56f424d29a804cc2645efb7f67b71b785abde
+ARG           FROM_IMAGE_RUNTIME=base:runtime-bullseye-2021-10-15@sha256:5c54594a24e3dde2a82e2027edd6d04832204157e33775edc66f716fa938abba
 
 FROM          $FROM_REGISTRY/$FROM_IMAGE_TOOLS                                                                          AS builder-tools
 
@@ -178,7 +178,7 @@ FROM          --platform=$BUILDPLATFORM $FROM_REGISTRY/$FROM_IMAGE_AUDITOR      
 ARG           TARGETARCH
 
 COPY          --from=builder-cross   /dist/boot           /dist/boot
-COPY          --from=builder-tools  /boot/bin/goello-server  /dist/boot/bin
+COPY          --from=builder-tools  /boot/bin/goello-server-ng  /dist/boot/bin
 COPY          --from=builder-tools  /boot/bin/goello-client  /dist/boot/bin
 
 # XXX check if they both need it or what
@@ -264,23 +264,23 @@ USER          dubo-dubon-duponey
 COPY          --from=assembly --chown=$BUILD_UID:root /dist /
 
 ENV           MODE="server"
-ENV           NICK="snap"
+ENV           _SERVICE_NICK="snap"
+ENV           _SERVICE_TYPE="http"
 
-ENV           DOMAIN="$NICK.local"
+ENV           DOMAIN="$_SERVICE_NICK.local"
 ENV           ADDITIONAL_DOMAINS=""
 ENV           PORT=1704
 EXPOSE        $PORT/tcp
 
-
 ### mDNS broadcasting
-# Enable/disable mDNS support
-ENV           MDNS_ENABLED=false
-# Name is used as a short description for the service
-ENV           MDNS_NAME="$NICK mDNS display name"
-# The service will be annonced and reachable at $MDNS_HOST.local
-ENV           MDNS_HOST="$NICK"
 # Type to advertise
-ENV           MDNS_TYPE="_snapcast._tcp"
+ENV           MDNS_TYPE="_$_SERVICE_TYPE._tcp"
+# Name is used as a short description for the service
+ENV           MDNS_NAME="$_SERVICE_NICK mDNS display name"
+# The service will be annonced and reachable at $MDNS_HOST.local (set to empty string to disable mDNS announces entirely)
+ENV           MDNS_HOST="$_SERVICE_NICK"
+# Also announce the service as a workstation (for example for the benefit of coreDNS mDNS)
+ENV           MDNS_STATION=true
 
 #_snapcast._tcp. - 1 item
 #Snapcast
