@@ -76,27 +76,27 @@ if [ "$MODE" == "server" ]; then
   HOME=/tmp exec snapserver --config /config/snapserver/main.conf
 fi
 
-[ -e "/data/host_UUID" ] || head /dev/urandom | tr -dc A-Za-z0-9 | head -c 64 > /data/host_UUID
-UUID="$(cat /data/host_UUID)"
+if [ "$NOU" ]; then
+  [ -e "/data/host_UUID" ] || head /dev/urandom | tr -dc A-Za-z0-9 | head -c 64 > /data/host_UUID
+  UUID="$(cat /data/host_UUID)"
 
-server="$(goello-client -t "_snapcast-tcp._tcp" -n "$MDNS_HOST")"
-server="$(print "%s" "$server" | jq -rc .IPs[])"
-port="$(print "%s" "$server" | jq -rc .Port)"
+  server="$(goello-client -t "_snapcast._tcp" -n "$MDNS_HOST")"
+  port="$(printf "%s" "$server" | jq -rc .Port)"
+  server="$(printf "%s" "$server" | jq -rc .IPs[])"
+else
+  helpers::dir::writable "/run/avahi-daemon" create
+  rm -f /run/avahi-daemon/pid
+  avahi-daemon --daemonize --no-drop-root --no-chroot
+  server="$MDNS_HOST"
+  port=1704
+fi
 
 # Log levels [trace,debug,info,notice,warning,error,fatal]
-# Mixers: software|hardware|script|none
-# Player could be file (not sure how to use the Sonos yet...)
-exec snapclient \
-  --logsink stdout \
-  --player alsa \
-  --mixer none \
-  --mstderr \
-  --hostID "$UUID" \
-  --host "$server" \
-  --port "$port" \
-  --logfilter "*:$(printf "%s" "${LOG_LEVEL:-error}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^(warn)$/warning/')"
 
-# --soundcard default:CARD=Qutest
-#  --instance "$NB"
-#  -l, --list                      list PCM devices
-#  --soundcard arg (=default)  index or name of the pcm device
+args=(--logsink stdout --mstderr --hostID "$UUID" --host "$server" --port "$port" --player alsa)
+[ ! "${DEVICE:-}" ] || args+=(--soundcard "$DEVICE")
+[ ! "${MIXER:-}" ] && args+=(--mixer none) || args+=(--mixer "hardware:$MIXER")
+
+exec snapclient "${args[@]}" \
+  --logfilter "*:$(printf "%s" "${LOG_LEVEL:-error}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^(warn)$/warning/')" \
+  "$@"
