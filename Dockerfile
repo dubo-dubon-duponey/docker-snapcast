@@ -176,6 +176,10 @@ FROM          $FROM_REGISTRY/$FROM_IMAGE_RUNTIME
 
 USER          root
 
+# nss-mdns is not needed by the server
+# jq is only needed if not relying on goello
+# libasound is not needed by the server, but the client complains about missing
+# /usr/share/alsa/alsa.conf which can maybe be copied over instead
 RUN           --mount=type=secret,uid=100,id=CA \
               --mount=type=secret,uid=100,id=CERTIFICATE \
               --mount=type=secret,uid=100,id=KEY \
@@ -185,6 +189,7 @@ RUN           --mount=type=secret,uid=100,id=CA \
               --mount=type=secret,id=APT_CONFIG \
               apt-get update -qq \
               && apt-get install -qq --no-install-recommends \
+                libasound2=1.2.4-1.1 \
                 libnss-mdns=0.14.1-2 \
                 jq=1.6-2.1 \
               && apt-get -qq autoremove       \
