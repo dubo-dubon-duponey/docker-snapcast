@@ -8,95 +8,48 @@ source "$root/helpers.sh"
 # shellcheck source=/dev/null
 source "$root/mdns.sh"
 
-# mDNS blast if asked to
+#### Server
 if [ "$MODE" == "server" ]; then
   [ ! "${MDNS_HOST:-}" ] || {
-    [ ! "${MDNS_STATION:-}" ] || mdns::add "_workstation._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "$PORT"
-    mdns::add "$MDNS_TYPE" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
-    mdns::add "_snapcast-stream._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
-    mdns::add "_snapcast-tcp._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
-    mdns::add "_snapcast-http._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1780"
-    mdns::add "_snapcast-jsonrpc._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
-    mdns::start &
+    [ ! "${MDNS_STATION:-}" ] || mdns::records::add "_workstation._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
+    mdns::records::add "$MDNS_TYPE" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
+    mdns::records::add "_snapcast-stream._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
+#    mdns::records::add "_snapcast-tcp._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
+#    mdns::records::add "_snapcast-jsonrpc._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
+    mdns::records::add "_snapcast-http._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "443"
+    mdns::records::broadcast &
   }
+  start::sidecar &
+
+  XDG_CONFIG_HOME=/tmp/config
+
+  # https://github.com/badaix/snapcast/issues/231
+  # https://github.com/badaix/snapcast/blob/master/server/etc/snapserver.conf
+  args=( \
+    --logging.sink=stdout \
+    --logging.filter="*:$(printf "%s" "${LOG_LEVEL:-error}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^(warn)$/warning/')" \
+    --server.datadir="$XDG_CONFIG_HOME" \
+    --http.bind_to_address="127.0.0.1" \
+    --http.port=10042 \
+    --tcp.enabled=false \
+  )
+  while read -r line; do
+    [ ! "$line" ] || args+=(--stream.source="$line")
+  done <<<"$SOURCES"
+
+  exec snapserver "${args[@]}" "$@"
 fi
 
-NAME=${NAME:-no name}
+#### Client
+_uuid="$(cat /data/host_UUID 2>/dev/null || head /dev/urandom | tr -dc A-Za-z0-9 | head -c 64 | tee /data/host_UUID)"
 
-helpers::dbus(){
-  # On container restart, cleanup the crap
-  rm -f /run/dbus/pid
+[ "${MDNS_NSS_ENABLED:-}" != true ] || mdns::resolver::start
 
-  # https://linux.die.net/man/1/dbus-daemon-1
-  dbus-daemon --system
-
-  until [ -e /run/dbus/system_bus_socket ]; do
-    sleep 1s
-  done
-}
-
-helpers::avahi(){
-  # On container restart, cleanup the crap
-  rm -f /run/avahi-daemon/pid
-
-  # Set the hostname, if we have it
-  sed -i'' -e "s,%AVAHI_NAME%,$AVAHI_NAME,g" /data/avahi-daemon.conf
-
-  # https://linux.die.net/man/8/avahi-daemon
-  avahi-daemon -f /data/avahi-daemon.conf --daemonize --no-chroot
-}
-
-# https://github.com/badaix/snapcast
-# https://github.com/badaix/snapcast/blob/master/doc/build.md
-# https://github.com/badaix/snapcast/blob/master/doc/build.md#linux-native
-
-
-# For the client: --player <name>:? for options
-# Serve has webapp included at http://<snapserver host>:1780
-
-# Disable AVAHI_FOUND and BONJOUR_FOUND to remove announce
-
-# Working hypotheses (is this per-person?):
-# 1 librespot on nuc
-# 1 airplay on nuc
-# 1 roon bridge on nuc?
-# ----> 1 snapcast server
-
-# ----> n snapcast clients, per speaker
-
-# Better separate the client and server in two different images?
-
-#  helpers::dbus
-#  helpers::avahi
-
-# HOST=$(goello-client  $MDNS_HOST.local)
-
-
-if [ "$MODE" == "server" ]; then
-  HOME=/tmp exec snapserver --config /config/snapserver/main.conf
-fi
-
-if [ "$NOU" ]; then
-  [ -e "/data/host_UUID" ] || head /dev/urandom | tr -dc A-Za-z0-9 | head -c 64 > /data/host_UUID
-  UUID="$(cat /data/host_UUID)"
-
-  server="$(goello-client -t "_snapcast._tcp" -n "$MDNS_HOST")"
-  port="$(printf "%s" "$server" | jq -rc .Port)"
-  server="$(printf "%s" "$server" | jq -rc .IPs[])"
-else
-  helpers::dir::writable "/run/avahi-daemon" create
-  rm -f /run/avahi-daemon/pid
-  avahi-daemon --daemonize --no-drop-root --no-chroot
-  server="$MDNS_HOST"
-  port=1704
-fi
-
-# Log levels [trace,debug,info,notice,warning,error,fatal]
-
-args=(--logsink stdout --mstderr --hostID "$UUID" --host "$server" --port "$port" --player alsa)
+args=(--logsink stdout --mstderr --hostID "$_uuid" --host "$SNAPCAST_SERVER" --port "1704" --player alsa)
 [ ! "${DEVICE:-}" ] || args+=(--soundcard "$DEVICE")
 [ ! "${MIXER:-}" ] && args+=(--mixer none) || args+=(--mixer "hardware:$MIXER")
 
+# Log levels [trace,debug,info,notice,warning,error,fatal]
 exec snapclient "${args[@]}" \
   --logfilter "*:$(printf "%s" "${LOG_LEVEL:-error}" | tr '[:upper:]' '[:lower:]' | sed -E 's/^(warn)$/warning/')" \
   "$@"

@@ -8,6 +8,9 @@ ARG           FROM_IMAGE_RUNTIME=base:runtime-bullseye-2021-10-15@sha256:5c54594
 
 FROM          $FROM_REGISTRY/$FROM_IMAGE_TOOLS                                                                          AS builder-tools
 
+# https://github.com/badaix/snapcast
+# https://github.com/badaix/snapcast/blob/master/doc/build.md
+# https://github.com/badaix/snapcast/blob/master/doc/build.md#linux-native
 
 #######################
 # Fetcher
@@ -62,6 +65,8 @@ RUN           --mount=type=secret,uid=100,id=CA \
                 libboost-dev:"$DEB_TARGET_ARCH"=1.74.0.3
 
 #                libstdc++-10-dev:"$DEB_TARGET_ARCH"=10.2.1-6 \
+#              export CMAKE_C_COMPILER="$CC"; \
+#              export CMAKE_CXX_COMPILER="$CXX"; \
 
 WORKDIR       /source
 
@@ -70,8 +75,6 @@ RUN           eval "$(dpkg-architecture -A "$(echo "$TARGETARCH$TARGETVARIANT" |
               export AR="${DEB_TARGET_GNU_TYPE}-ar"; \
               export CC="${DEB_TARGET_GNU_TYPE}-gcc"; \
               export CXX="${DEB_TARGET_GNU_TYPE}-g++"; \
-              export CMAKE_C_COMPILER="$CC"; \
-              export CMAKE_CXX_COMPILER="$CXX"; \
               sed -Ei "s/CXX       = g[+][+]/CXX     = $CXX/" client/Makefile; \
               sed -Ei "s/ -DHAS_PULSE//" client/Makefile; \
               sed -Ei "s/ -lpulse//" client/Makefile; \
@@ -83,12 +86,10 @@ RUN           eval "$(dpkg-architecture -A "$(echo "$TARGETARCH$TARGETVARIANT" |
               export AR="${DEB_TARGET_GNU_TYPE}-ar"; \
               export CC="${DEB_TARGET_GNU_TYPE}-gcc"; \
               export CXX="${DEB_TARGET_GNU_TYPE}-g++"; \
-              export CMAKE_C_COMPILER="$CC"; \
-              export CMAKE_CXX_COMPILER="$CXX"; \
               sed -Ei "s/CXX       = g[+][+]/CXX     = $CXX/" server/Makefile; \
-              sed -Ei "s/ -DHAS_AVAHI//" client/Makefile; \
-              sed -Ei "s/ -lavahi-client -lavahi-common//" client/Makefile; \
-              sed -Ei "s/ publishZeroConf\/publish_avahi.o//" client/Makefile; \
+              sed -Ei "s/ -DHAS_AVAHI//" server/Makefile; \
+              sed -Ei "s/ -lavahi-client -lavahi-common//" server/Makefile; \
+              sed -Ei "s/ publishZeroConf\/publish_avahi.o//" server/Makefile; \
               ADD_CFLAGS="-I/dependencies/boost/ -I/usr/include" make -C server
 
 RUN           mkdir -p /dist/boot/bin; \
@@ -129,9 +130,12 @@ RUN           --mount=type=secret,uid=100,id=CA \
               rm -rf /tmp/*               && \
               rm -rf /var/tmp/*
 
-COPY          --from=builder-cross  /dist/boot           /dist/boot
+COPY          --from=builder-cross  /dist/boot                  /dist/boot
 COPY          --from=builder-tools  /boot/bin/goello-server-ng  /dist/boot/bin
-COPY          --from=builder-tools  /boot/bin/goello-client  /dist/boot/bin
+# COPY          --from=builder-tools  /boot/bin/goello-client  /dist/boot/bin
+COPY          --from=builder-tools  /boot/bin/caddy             /dist/boot/bin
+
+RUN           setcap 'cap_net_bind_service+ep'          /dist/boot/bin/caddy
 
 RUN           cp /usr/sbin/avahi-daemon                 /dist/boot/bin
 RUN           setcap 'cap_chown+ei cap_dac_override+ei' /dist/boot/bin/avahi-daemon
@@ -198,61 +202,93 @@ RUN           --mount=type=secret,uid=100,id=CA \
               && rm -rf /tmp/*                \
               && rm -rf /var/tmp/*
 
-RUN           mkdir -p /run/avahi-daemon \
-              && chown "$BUILD_UID":root /run/avahi-daemon \
-              && chmod 775 /run/avahi-daemon
-
-VOLUME        /run
-
-#                libavahi-client3=0.8-5 \
-#                libavahi-common3=0.8-5 \
-#                dbus=1.12.20-2 \
-#                avahi-daemon=0.8-5 \
-#                libatomic1=10.2.1-6 \
-#                libpulse0=14.2-2 \
-
-#RUN           dbus-uuidgen --ensure \
-#              && mkdir -p /run/dbus \
-#              && mkdir -p /run/avahi-daemon \
-#              && chown "$BUILD_UID":root /run/dbus \
-#              && chown "$BUILD_UID":root /run/avahi-daemon \
-#              && chmod 775 /run/avahi-daemon \
-#              && chmod 775 /run/dbus
+# Deviate avahi shite into /tmp - only matters for client
+RUN           ln -s $XDG_STATE_HOME/avahi-daemon /run
 
 USER          dubo-dubon-duponey
 
 COPY          --from=assembly --chown=$BUILD_UID:root /dist /
 
+# server or client - XXX maybe split these images
 ENV           MODE="server"
+ENV           SOURCES=""
+
+####### Server only
 ENV           _SERVICE_NICK="snap"
 ENV           _SERVICE_TYPE="snapcast"
 
+### Front server configuration
+# Port to use
+ENV           PORT_HTTPS=443
+ENV           PORT_HTTP=80
+EXPOSE        443
+EXPOSE        80
+# Log verbosity for
+ENV           LOG_LEVEL="warn"
+# Domain name to serve
+ENV           DOMAIN="$_SERVICE_NICK.local"
+ENV           ADDITIONAL_DOMAINS="https://*.debian.org"
+# Whether the server should behave as a proxy (disallows mTLS)
+ENV           SERVER_NAME="DuboDubonDuponey/1.0 (Caddy/2) [$_SERVICE_NICK]"
+# Control wether tls is going to be "internal" (eg: self-signed), or alternatively an email address to enable letsencrypt - use "" to disable TLS entirely
+ENV           TLS="internal"
+# 1.2 or 1.3
+ENV           TLS_MIN=1.3
+# Issuer name to appear in certificates
+#ENV           TLS_ISSUER="Dubo Dubon Duponey"
+# Either disable_redirects or ignore_loaded_certs if one wants the redirects
+ENV           TLS_AUTO=disable_redirects
+# Staging
+# https://acme-staging-v02.api.letsencrypt.org/directory
+# Plain
+# https://acme-v02.api.letsencrypt.org/directory
+# PKI
+# https://pki.local
+ENV           TLS_SERVER="https://acme-v02.api.letsencrypt.org/directory"
+# Either require_and_verify or verify_if_given, or "" to disable mTLS altogether
+ENV           MTLS="require_and_verify"
+# Root certificate to trust for mTLS
+ENV           MTLS_TRUST="/certs/mtls_ca.crt"
+# Realm for authentication - set to "" to disable authentication entirely
+ENV           AUTH="My Precious Realm"
+# Provide username and password here (call the container with the "hash" command to generate a properly encrypted password, otherwise, a random one will be generated)
+ENV           AUTH_USERNAME="dubo-dubon-duponey"
+ENV           AUTH_PASSWORD="cmVwbGFjZV9tZV93aXRoX3NvbWV0aGluZwo="
+
+# Caddy will server on that domain
 ENV           DOMAIN="$_SERVICE_NICK.local"
 ENV           ADDITIONAL_DOMAINS=""
-ENV           PORT=1704
-EXPOSE        $PORT/tcp
+ENV           PORT_HTTP=80
+ENV           PORT_HTTPS=443
+ENV           TLS_SERVER="https://acme-v02.api.letsencrypt.org/directory"
 
 ### mDNS broadcasting
-# Type to advertise
-ENV           MDNS_TYPE="_$_SERVICE_TYPE._tcp"
-# Name is used as a short description for the service
-ENV           MDNS_NAME="$_SERVICE_NICK mDNS display name"
 # The service will be annonced and reachable at $MDNS_HOST.local (set to empty string to disable mDNS announces entirely)
 ENV           MDNS_HOST="$_SERVICE_NICK"
+# Name is used as a short description for the service
+ENV           MDNS_NAME="$_SERVICE_NICK mDNS display name"
+# Type to advertise
+ENV           MDNS_TYPE="_$_SERVICE_TYPE._tcp"
 # Also announce the service as a workstation (for example for the benefit of coreDNS mDNS)
 ENV           MDNS_STATION=true
 
+# Stream, RPC, and Caddy
+EXPOSE        1704/tcp
+EXPOSE        1705/tcp
+EXPOSE        443/tcp
+
+# This is used by caddy to create the endpoint, so, mandatory even without active checks
+ENV           HEALTHCHECK_URL="http://127.0.0.1:10000/?healthcheck"
+#HEALTHCHECK --interval=120s --timeout=30s --start-period=10s --retries=1 CMD rtsp-health || exit 1
+
+
 ####### Client only
+ENV           MDNS_NSS_ENABLED=true
+ENV           SNAPCAST_SERVER="snappy.local"
+
+# Alsa device and mixer to use
 ENV           DEVICE=""
 ENV           MIXER=""
 
-
-#ENV           NAME=TotaleCroquette
-
-# ENV           HEALTHCHECK_URL=rtsp://127.0.0.1:5000
-
-#EXPOSE        5000/tcp
-#EXPOSE        6001-6011/udp
-
-#HEALTHCHECK --interval=120s --timeout=30s --start-period=10s --retries=1 CMD rtsp-health || exit 1
-
+# If using avahi, need run to be writable
+# VOLUME        /run

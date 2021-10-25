@@ -295,7 +295,7 @@ class SnapControl {
             else {
                 this.action(answer);
             }
-            // TODO: don't update everything, but only the changed, 
+            // TODO: don't update everything, but only the changed,
             // e.g. update the values for the volume sliders
             show();
         }
@@ -319,10 +319,10 @@ function show() {
     console.log("Snapweb version " + (versionElem ? versionElem.content : "null"));
     let play_img;
     if (snapstream) {
-        play_img = 'stop.png';
+        play_img = '/img/stop.png';
     }
     else {
-        play_img = 'play.png';
+        play_img = '/img/play.png';
     }
     let content = "";
     content += "<div class='navbar'>Snapcast";
@@ -357,12 +357,12 @@ function show() {
         if (group.muted == true) {
             classgroup = 'group muted';
             muted = true;
-            mute_img = 'mute_icon.png';
+            mute_img = '/img/mute_icon.png';
         }
         else {
             classgroup = 'group';
             muted = false;
-            mute_img = 'speaker_icon.png';
+            mute_img = '/img/speaker_icon.png';
         }
         // Start group div
         content += "<div id='g_" + group.id + "' class='" + classgroup + "'>";
@@ -419,12 +419,12 @@ function show() {
             if (client.config.volume.muted == true) {
                 muted = true;
                 sliderclass = 'slider muted';
-                mute_img = 'mute_icon.png';
+                mute_img = '/img/mute_icon.png';
             }
             else {
                 sliderclass = 'slider';
                 muted = false;
-                mute_img = 'speaker_icon.png';
+                mute_img = '/img/speaker_icon.png';
             }
             // Populate client div
             content += "<a href=\"javascript:setVolume('" + client.id + "'," + !muted + ");\"><img src='" + mute_img + "' class='mute-button'></a>";
