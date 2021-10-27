@@ -141,14 +141,12 @@ RUN           cp /usr/sbin/avahi-daemon                 /dist/boot/bin
 RUN           setcap 'cap_chown+ei cap_dac_override+ei' /dist/boot/bin/avahi-daemon
 
 # hadolint ignore=SC2016
-RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/bin/snapclient
-# hadolint ignore=SC2016
-RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/bin/snapserver
-
-RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/lib/libvorbisenc.so.2
-RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/lib/libvorbis.so.0
-RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/lib/libsoxr.so.0
-RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/lib/libFLAC.so.8
+RUN           patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/bin/snapclient; \
+              patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/bin/snapserver; \
+              patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/lib/libvorbisenc.so.2; \
+              patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/lib/libvorbis.so.0; \
+              patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/lib/libsoxr.so.0; \
+              patchelf --set-rpath '$ORIGIN/../lib'           /dist/boot/lib/libFLAC.so.8
 
 # XXX              NO_SYSTEM_LINK=true \
 # RUN           BIND_NOW=true \
@@ -203,7 +201,7 @@ RUN           --mount=type=secret,uid=100,id=CA \
               && rm -rf /var/tmp/*
 
 # Deviate avahi shite into /tmp - only matters for client
-RUN           ln -s $XDG_STATE_HOME/avahi-daemon /run
+RUN           ln -s "$XDG_STATE_HOME"/avahi-daemon /run
 
 USER          dubo-dubon-duponey
 
@@ -286,6 +284,7 @@ ENV           HEALTHCHECK_URL="http://127.0.0.1:10000/?healthcheck"
 ####### Client only
 ENV           MDNS_NSS_ENABLED=true
 ENV           SNAPCAST_SERVER="snappy.local"
+ENV           SNAPCAST_TCP_ENABLED=false
 
 # Alsa device and mixer to use
 ENV           DEVICE=""

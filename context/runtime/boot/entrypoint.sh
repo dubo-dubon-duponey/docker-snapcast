@@ -14,8 +14,10 @@ if [ "$MODE" == "server" ]; then
     [ ! "${MDNS_STATION:-}" ] || mdns::records::add "_workstation._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
     mdns::records::add "$MDNS_TYPE" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
     mdns::records::add "_snapcast-stream._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
-#    mdns::records::add "_snapcast-tcp._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
-#    mdns::records::add "_snapcast-jsonrpc._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
+    [ "$SNAPCAST_TCP_ENABLED" == false ] || {
+      mdns::records::add "_snapcast-tcp._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
+      mdns::records::add "_snapcast-jsonrpc._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1705"
+    }
     mdns::records::add "_snapcast-http._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "443"
     mdns::records::broadcast &
   }
@@ -31,7 +33,7 @@ if [ "$MODE" == "server" ]; then
     --server.datadir="$XDG_CONFIG_HOME" \
     --http.bind_to_address="127.0.0.1" \
     --http.port=10042 \
-    --tcp.enabled=false \
+    --tcp.enabled="$SNAPCAST_TCP_ENABLED" \
   )
   while read -r line; do
     [ ! "$line" ] || args+=(--stream.source="$line")
