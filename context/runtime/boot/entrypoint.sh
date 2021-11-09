@@ -10,7 +10,7 @@ source "$root/mdns.sh"
 
 #### Server
 if [ "$MODE" == "server" ]; then
-  [ ! "${MDNS_HOST:-}" ] || {
+  [ "${MDNS_ENABLED:-}" != true ] || {
     [ ! "${MDNS_STATION:-}" ] || mdns::records::add "_workstation._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
     mdns::records::add "$MDNS_TYPE" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
     mdns::records::add "_snapcast-stream._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "1704"
@@ -21,7 +21,7 @@ if [ "$MODE" == "server" ]; then
     mdns::records::add "_snapcast-http._tcp" "$MDNS_HOST" "${MDNS_NAME:-}" "443"
     mdns::records::broadcast &
   }
-  start::sidecar &
+  [ "${PROXY_HTTPS_ENABLED:-}" != true ] || start::sidecar &
 
   XDG_CONFIG_HOME=/tmp/config
 
